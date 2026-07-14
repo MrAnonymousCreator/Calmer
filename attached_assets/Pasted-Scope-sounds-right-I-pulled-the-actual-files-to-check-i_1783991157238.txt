@@ -1,0 +1,11 @@
+Scope sounds right — I pulled the actual files to check it against reality, and it lines up well. Two things worth confirming and one gap.
+
+**Confirms:**
+- `analysis.functions.ts` already does exactly what item 1 describes — one server fn, one CoinGecko fetch (`market_chart?days=14`), 5-min cache, and `analyzeCandles` already buckets to daily candles with real `total_volumes`. That pipeline is sound; you're routing the focused asset through it instead of building it fresh.
+- The hourly math is real, not fake — `sparkline_in_7d` from CoinGecko is genuine hourly data, so `readSignals`/`buildTruth` in `market-data.ts` and the duplicate `rsi`/`stdev` in `state-engine.ts` are computing "14-period RSI" on ~14 hours, not 14 days, while labeling it as daily. Deleting both in favor of one `SignalSet` is the right call — that's actually a third copy of the same math getting collapsed, not two.
+
+**One gap:** `state-engine.ts`'s `loadMemory`/`saveMemory` persist to `window.localStorage` today, keyed by `assetId` — this isn't just in-process memory, it survives across sessions and is what drives the `Persistence`/streak counting (`persistenceCount`, `flipped`/`drifted` clusters). That memory is currently built from hourly-cadence readings. The moment you swap the input to daily `SignalSet`, any existing user's stored `EngineMemory` is comparing yesterday's hourly-based cluster reading against today's daily-based one — which can register as a spurious flip or drift on first load post-deploy, purely from the source change, not a real market shift.
+
+Worth adding to scope: bump the localStorage key/version (or just clear `EngineMemory` on deploy) so day-one evaluations start clean instead of diffing against stale hourly state. That's a one-line addition, not a new persistence system — doesn't conflict with your "no DB persistence yet" boundary, it's just hygiene on the persistence that already exists client-side.
+
+Everything else — watchlist staying price-only, thresholds unchanged, no paywall, no `briefing_snapshots` wiring — is the right disciplined scope. Ship it.

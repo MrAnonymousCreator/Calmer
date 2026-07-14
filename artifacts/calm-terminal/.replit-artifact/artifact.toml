@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Calm Terminal"
+version = "1.0.0"
+id = "artifacts/calm-terminal"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23168
+
+[services.development]
+run = "pnpm --filter @workspace/calm-terminal run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/calm-terminal", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/calm-terminal/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23168"
+BASE_PATH = "/"

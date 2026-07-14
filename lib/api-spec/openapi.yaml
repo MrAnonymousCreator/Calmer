@@ -3,20 +3,23 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Calm Terminal API — CoinGecko proxy and analysis engine
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: markets
+    description: Live market data
+  - name: analysis
+    description: Structural analysis per asset
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +27,290 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /markets:
+    get:
+      operationId: getMarkets
+      tags: [markets]
+      summary: Top-15 assets from CoinGecko with sparklines
+      responses:
+        "200":
+          description: Market data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MarketsResponse"
+
+  /analysis/{id}/{symbol}:
+    get:
+      operationId: getAnalysis
+      tags: [analysis]
+      summary: 14-day swing-trader analysis for one asset
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Analysis result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisResponse"
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required:
+        - status
       properties:
         status:
           type: string
-      required:
-        - status
 
+    Asset:
+      type: object
+      required:
+        - id
+        - symbol
+        - name
+        - price
+        - change24h
+        - marketCap
+        - volume
+        - sparkline
+        - about
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        name:
+          type: string
+        price:
+          type: number
+        change24h:
+          type: number
+        marketCap:
+          type: number
+        volume:
+          type: number
+        sparkline:
+          type: array
+          items:
+            type: number
+        about:
+          type: string
+
+    MarketsResponse:
+      type: object
+      required:
+        - assets
+        - cachedAt
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        cachedAt:
+          type: number
+
+    Candle:
+      type: object
+      required:
+        - t
+        - o
+        - h
+        - l
+        - c
+        - v
+      properties:
+        t:
+          type: number
+          description: "ms epoch, start-of-day"
+        o:
+          type: number
+        h:
+          type: number
+        l:
+          type: number
+        c:
+          type: number
+        v:
+          type: number
+
+    ChangeLogEvent:
+      type: object
+      required:
+        - dayOffset
+        - label
+        - detail
+        - tone
+      properties:
+        dayOffset:
+          type: number
+        label:
+          type: string
+        detail:
+          type: string
+        tone:
+          type: string
+          enum:
+            - positive
+            - negative
+            - neutral
+
+    SetupSequence:
+      type: object
+      required:
+        - kind
+        - headline
+        - progress
+        - events
+      properties:
+        kind:
+          type: string
+          enum:
+            - Breakout
+            - "Trend Failure"
+            - "Clean Retest"
+            - Compression
+        headline:
+          type: string
+        progress:
+          type: number
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChangeLogEvent"
+
+    ExpectedMove:
+      type: object
+      required:
+        - low
+        - high
+        - horizonDays
+        - method
+      properties:
+        low:
+          type: number
+        high:
+          type: number
+        horizonDays:
+          type: number
+        method:
+          type: string
+
+    Invalidation:
+      type: object
+      required:
+        - price
+        - direction
+        - reason
+      properties:
+        price:
+          type: number
+        direction:
+          type: string
+          enum:
+            - above
+            - below
+        reason:
+          type: string
+
+    StructuralBoundaries:
+      type: object
+      required:
+        - support
+        - resistance
+        - sma20
+        - sma50
+        - atr
+        - expectedMove
+        - invalidation
+      properties:
+        support:
+          type: number
+        resistance:
+          type: number
+        sma20:
+          type: number
+        sma50:
+          type:
+            - "number"
+            - "null"
+        atr:
+          type: number
+        expectedMove:
+          $ref: "#/components/schemas/ExpectedMove"
+        invalidation:
+          $ref: "#/components/schemas/Invalidation"
+
+    MarketStateBlock:
+      type: object
+      required:
+        - title
+        - body
+      properties:
+        title:
+          type: string
+        body:
+          type: string
+
+    AssetAnalysis:
+      type: object
+      required:
+        - id
+        - symbol
+        - behavioralState
+        - stateReason
+        - setup
+        - marketState
+        - boundaries
+        - triggerHeadline
+        - candles
+      properties:
+        id:
+          type: string
+        symbol:
+          type: string
+        behavioralState:
+          type: string
+          enum:
+            - Consolidating
+            - Trending
+            - "Mean Reversion"
+        stateReason:
+          type: string
+        setup:
+          $ref: "#/components/schemas/SetupSequence"
+        marketState:
+          $ref: "#/components/schemas/MarketStateBlock"
+        boundaries:
+          $ref: "#/components/schemas/StructuralBoundaries"
+        triggerHeadline:
+          type:
+            - "string"
+            - "null"
+        candles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Candle"
+
+    AnalysisResponse:
+      type: object
+      required:
+        - analysis
+        - cachedAt
+      properties:
+        analysis:
+          $ref: "#/components/schemas/AssetAnalysis"
+        cachedAt:
+          type: number

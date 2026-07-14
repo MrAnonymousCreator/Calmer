@@ -1,0 +1,1 @@
+- [Calm Terminal architecture](calm-terminal-arch.md) — React+Vite SPA at /calm-terminal; Express API at /api; no auth; localStorage only

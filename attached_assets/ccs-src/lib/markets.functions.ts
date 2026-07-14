@@ -1,0 +1,81 @@
+import { createServerFn } from "@tanstack/react-start";
+import type { Asset } from "./market-data";
+
+type CGCoin = {
+  id: string;
+  symbol: string;
+  name: string;
+  current_price: number;
+  price_change_percentage_24h: number | null;
+  market_cap: number;
+  total_volume: number;
+  sparkline_in_7d?: { price: number[] };
+};
+
+const ABOUT: Record<string, string> = {
+  bitcoin: "The original peer-to-peer digital currency. A scarce, decentralized store of value.",
+  ethereum: "A programmable settlement layer powering smart contracts and decentralized applications.",
+  solana: "A high-throughput blockchain optimized for low-latency consumer applications.",
+  cardano: "A research-driven proof-of-stake network focused on sustainability and formal methods.",
+  chainlink: "Decentralized oracle infrastructure connecting smart contracts to real-world data.",
+  "matic-network": "An Ethereum scaling ecosystem of zero-knowledge rollups and sidechains.",
+  polkadot: "A multi-chain protocol enabling interoperability between specialized blockchains.",
+  "avalanche-2": "A platform of customizable subnets with sub-second finality.",
+  "bitcoin-cash": "A Bitcoin fork prioritizing larger blocks and lower transaction fees.",
+  bittensor: "A decentralized network coordinating machine intelligence as a market.",
+};
+
+/** Module-scope cache. Cloudflare Workers may evict between requests, but
+ *  while warm it absorbs concurrent traffic and stays under CoinGecko's
+ *  free-tier limits (≈10–30 req/min). */
+type Cache = { ts: number; data: Asset[] };
+const CACHE_TTL_MS = 60_000;
+let cache: Cache | null = null;
+
+async function fetchFromCoinGecko(): Promise<Asset[]> {
+  const apiKey = process.env.COINGECKO_API_KEY;
+  const host = apiKey ? "https://pro-api.coingecko.com" : "https://api.coingecko.com";
+  const url =
+    `${host}/api/v3/coins/markets` +
+    `?vs_currency=usd&order=market_cap_desc&per_page=15&page=1` +
+    `&sparkline=true&price_change_percentage=24h`;
+
+  const headers: Record<string, string> = { accept: "application/json" };
+  if (apiKey) headers["x-cg-pro-api-key"] = apiKey;
+
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    throw new Error(`CoinGecko upstream ${res.status}`);
+  }
+  const data = (await res.json()) as CGCoin[];
+  return data.map((c) => ({
+    id: c.id,
+    symbol: (c.symbol ?? "").toUpperCase(),
+    name: c.name,
+    price: c.current_price ?? 0,
+    change24h: c.price_change_percentage_24h ?? 0,
+    marketCap: c.market_cap ?? 0,
+    volume: c.total_volume ?? 0,
+    sparkline:
+      c.sparkline_in_7d?.price && c.sparkline_in_7d.price.length > 0
+        ? c.sparkline_in_7d.price
+        : [c.current_price ?? 1],
+    about: ABOUT[c.id] ?? `${c.name} is a digital asset tracked across major venues.`,
+  }));
+}
+
+export const getMarkets = createServerFn({ method: "GET" }).handler(async () => {
+  const now = Date.now();
+  if (cache && now - cache.ts < CACHE_TTL_MS) {
+    return { assets: cache.data, cachedAt: cache.ts };
+  }
+  try {
+    const assets = await fetchFromCoinGecko();
+    cache = { ts: now, data: assets };
+    return { assets, cachedAt: now };
+  } catch (err) {
+    // If we have any prior cache, serve it stale rather than failing.
+    if (cache) return { assets: cache.data, cachedAt: cache.ts };
+    throw err;
+  }
+});

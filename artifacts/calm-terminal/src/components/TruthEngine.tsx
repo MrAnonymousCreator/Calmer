@@ -1,0 +1,305 @@
+import { useMemo, type ReactNode } from "react";
+import type { Asset } from "@/lib/market-data";
+import { formatPrice } from "@/lib/market-data";
+import { cn } from "@/lib/utils";
+
+function ema(arr: number[], period: number): number {
+  if (arr.length === 0) return 0;
+  const k = 2 / (period + 1);
+  let e = arr[0];
+  for (let i = 1; i < arr.length; i++) e = arr[i] * k + e * (1 - k);
+  return e;
+}
+
+function rsi(arr: number[], period = 14): number {
+  if (arr.length < period + 1) return 50;
+  let gains = 0;
+  let losses = 0;
+  for (let i = arr.length - period; i < arr.length; i++) {
+    const d = arr[i] - arr[i - 1];
+    if (d >= 0) gains += d;
+    else losses -= d;
+  }
+  const ag = gains / period;
+  const al = losses / period;
+  if (al === 0) return 100;
+  return 100 - 100 / (1 + ag / al);
+}
+
+function dailyReturns(arr: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 1; i < arr.length; i++) out.push((arr[i] - arr[i - 1]) / arr[i - 1]);
+  return out;
+}
+
+function mean(a: number[]): number {
+  return a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
+}
+
+function stdev(a: number[]): number {
+  const m = mean(a);
+  return Math.sqrt(mean(a.map((v) => (v - m) ** 2)));
+}
+
+type Reconstruction = {
+  systemState: "STABLE STATE" | "ELEVATED STATE";
+  prose: string;
+  metrics: {
+    label: string;
+    value: string;
+    context: string;
+  }[];
+  anomaly:
+    | { kind: "baseline"; text: string }
+    | { kind: "active"; text: string };
+};
+
+function buildReconstruction(asset: Asset): Reconstruction {
+  const s = asset.sparkline;
+  const last = s[s.length - 1] ?? asset.price;
+  const ema20 = ema(s.slice(-20), 20);
+  const ema20Prev = ema(s.slice(-21, -1), 20);
+  const pricePos = ((last - ema20) / ema20) * 100;
+  const r = rsi(s);
+  const rPrev = rsi(s.slice(0, -1));
+  const rDelta = r - rPrev;
+
+  const rets = dailyReturns(s);
+  const recent = rets.slice(-7);
+  const baseline = rets.slice(-30, -7);
+  const sigmaRecent = stdev(recent);
+  const sigmaBase = stdev(baseline) || sigmaRecent || 0.0001;
+  const sigmaDev = (sigmaRecent - sigmaBase) / sigmaBase;
+
+  // Structural level direction
+  const emaHolding = last >= ema20 ? "Holding" : "Lost";
+  const emaDirection = ema20 > ema20Prev ? "Expanding" : "Compressing";
+
+  // Prose composition (no emotional language)
+  const fragments: string[] = [];
+  if (pricePos > 0) {
+    fragments.push(
+      `${asset.name} is holding a ${Math.abs(pricePos) < 1 ? "tightly compressed" : "compressed"} structure ${pricePos.toFixed(1)}% above its 20-day EMA`,
+    );
+  } else {
+    fragments.push(
+      `${asset.name} is trading ${Math.abs(pricePos).toFixed(1)}% beneath its 20-day EMA`,
+    );
+  }
+
+  if (r > 68) {
+    fragments.push("momentum is highly overextended on the daily horizon");
+  } else if (r < 32) {
+    fragments.push("velocity is cooling down rapidly below historical norms");
+  } else if (Math.abs(rDelta) < 2) {
+    fragments.push("momentum indicators are flat, signaling a low-conviction consolidation phase");
+  } else if (rDelta < 0) {
+    fragments.push("momentum is gradually decelerating");
+  } else {
+    fragments.push("momentum is gradually firming");
+  }
+
+  if (sigmaDev > 1.5) {
+    fragments.push(
+      `volatility is undergoing an aggressive range expansion at ${sigmaDev.toFixed(1)}σ above baseline`,
+    );
+  } else if (sigmaDev < -0.5) {
+    fragments.push("volatility has compressed below baseline norms");
+  } else {
+    fragments.push("volatility remains within baseline norms");
+  }
+
+  const prose = fragments.join(". ") + ".";
+
+  // Anomaly detection
+  const anomalyActive = sigmaDev > 1.5 || r > 68 || r < 32;
+  const anomaly: Reconstruction["anomaly"] = anomalyActive
+    ? {
+        kind: "active",
+        text:
+          sigmaDev > 1.5
+            ? `Volatility expansion detected: current 7-day trading range exceeds 30-day baseline by ${sigmaDev.toFixed(1)}σ.`
+            : r > 68
+              ? `Momentum extension detected: RSI(14) reading at ${r.toFixed(0)} exceeds normal operating band.`
+              : `Momentum exhaustion detected: RSI(14) reading at ${r.toFixed(0)} sits below normal operating band.`,
+      }
+    : {
+        kind: "baseline",
+        text:
+          "System baseline normal. No liquidity cliffs or volume standard deviation breaches detected over the trailing 24-hour cycle.",
+      };
+
+  return {
+    systemState: anomalyActive ? "ELEVATED STATE" : "STABLE STATE",
+    prose,
+    metrics: [
+      {
+        label: "Price Position",
+        value: `$${formatPrice(last)}`,
+        context: `${pricePos >= 0 ? "+" : ""}${pricePos.toFixed(2)}% vs EMA20 (${Math.abs(pricePos) < 1 ? "Neutral" : pricePos > 0 ? "Extended" : "Below"})`,
+      },
+      {
+        label: "Velocity (RSI)",
+        value: r.toFixed(0),
+        context: `${rDelta >= 0 ? "+" : ""}${rDelta.toFixed(1)} (${rDelta > 1 ? "Firming" : rDelta < -1 ? "Cooling" : "Flat"})`,
+      },
+      {
+        label: "Structural Level",
+        value: `$${formatPrice(ema20)} (EMA)`,
+        context: emaHolding,
+      },
+      {
+        label: "Volatility Regime",
+        value: `${(sigmaRecent * 100).toFixed(2)}% daily`,
+        context: `${sigmaDev >= 0 ? "+" : ""}${sigmaDev.toFixed(2)}σ (${emaDirection})`,
+      },
+    ],
+    anomaly,
+  };
+}
+
+export function TruthEngine({ asset }: { asset: Asset }) {
+  const r = useMemo(() => buildReconstruction(asset), [asset]);
+  const elevated = r.systemState === "ELEVATED STATE";
+
+  return (
+    <section className="overflow-hidden rounded-3xl bg-surface">
+      {/* Header bar */}
+      <header className="flex items-center justify-between border-b border-border/60 px-6 py-3 font-mono text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
+        <span>
+          CALM TERMINAL <span className="opacity-40">//</span> {asset.symbol}-USD RECONSTRUCTION
+        </span>
+        <span
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full px-3 py-1",
+            elevated
+              ? "bg-[color-mix(in_oklab,var(--color-accent)_55%,transparent)] text-accent-foreground"
+              : "bg-muted text-foreground/70",
+          )}
+        >
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              elevated ? "bg-accent-foreground/70" : "bg-positive",
+            )}
+          />
+          {r.systemState}
+        </span>
+      </header>
+
+      {/* Prose block */}
+      <div className="px-8 py-10">
+        <div className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
+          Reconstruction
+        </div>
+        <p className="mt-4 max-w-3xl font-display text-[1.75rem] leading-[1.4] tracking-tight text-foreground">
+          {emphasize(r.prose)}
+        </p>
+        <p className="mt-5 text-xs text-muted-foreground">
+          Description of conditions, not a recommendation.
+        </p>
+      </div>
+
+      {/* Telemetry Matrix */}
+      <div className="border-t border-border/60 px-8 py-7">
+        <div className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
+          Telemetry Matrix
+        </div>
+        <div className="mt-5 overflow-hidden rounded-2xl border border-border/70">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 font-mono text-[10.5px] uppercase tracking-[0.18em] text-muted-foreground">
+              <tr>
+                <th className="px-4 py-2.5 text-left font-medium">Metric</th>
+                <th className="px-4 py-2.5 text-left font-medium">Value</th>
+                <th className="px-4 py-2.5 text-left font-medium">Context (24h Delta)</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {r.metrics.map((m) => (
+                <tr key={m.label}>
+                  <td className="px-4 py-3 text-foreground/80">{m.label}</td>
+                  <td className="px-4 py-3 font-mono tabular-nums text-foreground">{m.value}</td>
+                  <td className="px-4 py-3 font-mono text-[13px] text-muted-foreground">
+                    {m.context}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Anomaly Node */}
+      <div className="border-t border-border/60 px-8 pb-8 pt-7">
+        <div className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
+          Anomaly Node
+        </div>
+        <div
+          className={cn(
+            "mt-4 flex items-start gap-3 rounded-2xl border px-5 py-4 text-sm leading-relaxed",
+            r.anomaly.kind === "active"
+              ? "border-accent/60 bg-[color-mix(in_oklab,var(--color-accent)_18%,transparent)] text-accent-foreground"
+              : "border-border/70 bg-muted/30 text-foreground/75",
+          )}
+        >
+          <span
+            className={cn(
+              "mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+              r.anomaly.kind === "active" ? "bg-accent-foreground/70" : "bg-positive",
+            )}
+          />
+          <p>
+            <span className="font-medium">
+              {r.anomaly.kind === "active" ? "Active anomaly: " : "System baseline normal: "}
+            </span>
+            {r.anomaly.text}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Lightly emphasizes structural phrases for natural eye-flow. */
+function emphasize(text: string) {
+  const keys = [
+    /above its 20-day EMA/gi,
+    /beneath its 20-day EMA/gi,
+    /low-conviction consolidation phase/gi,
+    /highly overextended/gi,
+    /cooling down rapidly/gi,
+    /aggressive range expansion/gi,
+    /within baseline norms/gi,
+    /compressed below baseline norms/gi,
+  ];
+  const parts: (string | ReactNode)[] = [text];
+  let key = 0;
+  for (const re of keys) {
+    const next: (string | ReactNode)[] = [];
+    for (const p of parts) {
+      if (typeof p !== "string") {
+        next.push(p);
+        continue;
+      }
+      let lastIndex = 0;
+      const matches = [...p.matchAll(re)];
+      if (matches.length === 0) {
+        next.push(p);
+        continue;
+      }
+      for (const m of matches) {
+        const idx = m.index ?? 0;
+        if (idx > lastIndex) next.push(p.slice(lastIndex, idx));
+        next.push(
+          <span key={`em-${key++}`} className="font-medium text-foreground">
+            {m[0]}
+          </span>,
+        );
+        lastIndex = idx + m[0].length;
+      }
+      if (lastIndex < p.length) next.push(p.slice(lastIndex));
+    }
+    parts.splice(0, parts.length, ...next);
+  }
+  return <>{parts}</>;
+}
