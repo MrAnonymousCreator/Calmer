@@ -174,7 +174,7 @@ function computeTrend(spark: number[]): SignalReading {
   }
   return {
     key: "trend",
-    label: "Trend",
+    label: "Near-term trend",
     state,
     value: `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}% vs 50d`,
     sentence,
@@ -258,9 +258,9 @@ function computeVolume(asset: Pick<Asset, "volume" | "marketCap">): SignalReadin
   }
   return {
     key: "volume",
-    label: "Volume",
+    label: "Market activity",
     state,
-    value: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs 20d avg`,
+    value: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs 20d avg (vol/mcap)`,
     sentence,
     meaning,
     tone,

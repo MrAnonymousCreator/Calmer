@@ -24,6 +24,24 @@ import type { EngineMemory } from "@/lib/state-engine";
 const RANGES = ["1H", "1D", "1W", "1M", "1Y", "ALL"] as const;
 const VIEWS = ["Overview", "Calendar"] as const;
 
+const ASSET_META: Record<string, { category: string; launched: string; consensus: string }> = {
+  bitcoin:       { category: "Layer 1", launched: "2009", consensus: "Proof of Work" },
+  ethereum:      { category: "Layer 1", launched: "2015", consensus: "Proof of Stake" },
+  solana:        { category: "Layer 1", launched: "2020", consensus: "Proof of History / PoS" },
+  cardano:       { category: "Layer 1", launched: "2017", consensus: "Proof of Stake" },
+  "matic-network": { category: "Layer 2 / Scaling", launched: "2019", consensus: "Proof of Stake" },
+  polkadot:      { category: "Layer 0", launched: "2020", consensus: "Nominated PoS" },
+  "avalanche-2": { category: "Layer 1", launched: "2020", consensus: "Avalanche Consensus" },
+  chainlink:     { category: "Oracle Network", launched: "2019", consensus: "Decentralized Oracles" },
+  "bitcoin-cash": { category: "Layer 1", launched: "2017", consensus: "Proof of Work" },
+  bittensor:     { category: "AI Layer 1", launched: "2021", consensus: "Proof of Intelligence" },
+  tether:        { category: "Stablecoin", launched: "2014", consensus: "Multi-chain (issued)" },
+  "usd-coin":    { category: "Stablecoin", launched: "2018", consensus: "Multi-chain (issued)" },
+  binancecoin:   { category: "Exchange Token", launched: "2017", consensus: "Proof of Stake Authority" },
+  ripple:        { category: "Payment Network", launched: "2012", consensus: "XRP Ledger Consensus" },
+  "shiba-inu":   { category: "Meme / Layer 2", launched: "2020", consensus: "Proof of Stake" },
+};
+
 export function AssetWorkspace({ asset }: { asset: Asset }) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("1M");
   const [view, setView] = useState<(typeof VIEWS)[number]>("Overview");
@@ -199,9 +217,9 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
               {asset.about}
             </p>
             <div className="mt-6 grid max-w-md gap-3 text-sm">
-              <Row label="Category" value="Layer 1" />
-              <Row label="Launched" value="2015" />
-              <Row label="Consensus" value="Proof of Stake" />
+              <Row label="Category" value={ASSET_META[asset.id]?.category ?? "Digital Asset"} />
+              <Row label="Launched" value={ASSET_META[asset.id]?.launched ?? "—"} />
+              <Row label="Consensus" value={ASSET_META[asset.id]?.consensus ?? "—"} />
             </div>
           </section>
 

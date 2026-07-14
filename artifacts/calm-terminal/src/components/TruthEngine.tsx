@@ -90,7 +90,7 @@ function buildReconstruction(asset: Asset): Reconstruction {
   if (r > 68) {
     fragments.push("momentum is highly overextended on the daily horizon");
   } else if (r < 32) {
-    fragments.push("velocity is cooling down rapidly below historical norms");
+    fragments.push("Momentum is cooling rapidly below historical norms");
   } else if (Math.abs(rDelta) < 2) {
     fragments.push("momentum indicators are flat, signaling a low-conviction consolidation phase");
   } else if (rDelta < 0) {
@@ -134,12 +134,12 @@ function buildReconstruction(asset: Asset): Reconstruction {
     prose,
     metrics: [
       {
-        label: "Price Position",
-        value: `$${formatPrice(last)}`,
-        context: `${pricePos >= 0 ? "+" : ""}${pricePos.toFixed(2)}% vs EMA20 (${Math.abs(pricePos) < 1 ? "Neutral" : pricePos > 0 ? "Extended" : "Below"})`,
+        label: "EMA Position",
+        value: `${pricePos >= 0 ? "+" : ""}${pricePos.toFixed(2)}% vs EMA20`,
+        context: `${Math.abs(pricePos) < 1 ? "Neutral" : pricePos > 0 ? "Extended above" : "Below"} 20-day EMA`,
       },
       {
-        label: "Velocity (RSI)",
+        label: "Momentum (RSI)",
         value: r.toFixed(0),
         context: `${rDelta >= 0 ? "+" : ""}${rDelta.toFixed(1)} (${rDelta > 1 ? "Firming" : rDelta < -1 ? "Cooling" : "Flat"})`,
       },
