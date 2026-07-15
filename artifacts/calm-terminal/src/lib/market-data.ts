@@ -100,7 +100,7 @@ export const news: TickerItem[] = [
   { tag: "Risk", text: "Treasury yields ease, risk assets steady into the close" },
 ];
 
-// ───────────────────────── Truth Engine ─────────────────────────
+// ───────────────────────── Signal types ─────────────────────────
 
 export type SignalKey = "trend" | "momentum" | "volume" | "volatility" | "position";
 export type Tone = "positive" | "negative" | "neutral";
@@ -118,284 +118,138 @@ export type SignalReading = {
   tone: Tone;
 };
 
-function sma(arr: number[], n: number): number {
+// ─────── math helpers (internal) ───────
+function _sma(arr: number[], n: number): number {
   const s = arr.slice(-n);
   return s.reduce((a, b) => a + b, 0) / s.length;
 }
-
-function rsi(arr: number[], period = 14): number {
-  if (arr.length < period + 1) return 50;
-  let gains = 0;
-  let losses = 0;
-  for (let i = arr.length - period; i < arr.length; i++) {
-    const d = arr[i] - arr[i - 1];
-    if (d >= 0) gains += d;
-    else losses -= d;
+function _rsi(closes: number[], period = 14): number {
+  if (closes.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
   }
-  const avgG = gains / period;
-  const avgL = losses / period;
-  if (avgL === 0) return 100;
-  const rs = avgG / avgL;
-  return 100 - 100 / (1 + rs);
+  const ag = gains / period, al = losses / period;
+  if (al === 0) return 100;
+  return 100 - 100 / (1 + ag / al);
 }
 
-function stdev(arr: number[]): number {
-  const m = arr.reduce((a, b) => a + b, 0) / arr.length;
-  const v = arr.reduce((a, b) => a + (b - m) ** 2, 0) / arr.length;
-  return Math.sqrt(v);
-}
+// ───── Analysis-based signal derivation ─────────────────────────
+import type { AssetAnalysis } from "./analysis";
 
-function computeTrend(spark: number[]): SignalReading {
-  const last = spark[spark.length - 1];
-  const s20 = sma(spark, 20);
-  const s50 = sma(spark, Math.min(50, spark.length));
-  const above20 = last > s20;
+export function deriveSignalsFromAnalysis(analysis: AssetAnalysis): SignalReading[] {
+  const closes = analysis.candles.map((c) => c.c);
+  if (closes.length < 2) return [];
+
+  const last = closes[closes.length - 1];
+  const { sma20, sma50, support, resistance, atr } = analysis.boundaries;
+
+  // ── Trend ──────────────────────────────────────────────────────
+  const s50 = sma50 ?? _sma(closes, Math.min(50, closes.length));
+  const above20 = last > sma20;
   const above50 = last > s50;
   const spread = ((last - s50) / s50) * 100;
-  let state: string;
-  let tone: Tone;
-  let sentence: string;
-  let meaning: string;
-  if (above20 && above50 && spread > 1) {
-    state = "bullish";
-    tone = "positive";
-    sentence = "Trend is constructive";
-    meaning = "Price sits above both its short and longer-term averages.";
-  } else if (!above20 && !above50 && spread < -1) {
-    state = "bearish";
-    tone = "negative";
-    sentence = "Trend is weakening";
-    meaning = "Price has slipped below its short and longer-term averages.";
-  } else {
-    state = "neutral";
-    tone = "neutral";
-    sentence = "Trend is range-bound";
-    meaning = "Price is hovering near its averages with no clear direction.";
-  }
-  return {
-    key: "trend",
-    label: "Near-term trend",
-    state,
-    value: `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}% vs 50d`,
-    sentence,
-    meaning,
-    tone,
-  };
-}
 
-function computeMomentum(spark: number[]): SignalReading {
-  const r = rsi(spark);
-  let state: string;
-  let tone: Tone;
-  let sentence: string;
-  let meaning: string;
-  if (r < 30) {
-    state = "oversold";
-    tone = "neutral";
-    sentence = "Momentum is oversold";
-    meaning = "Selling pressure has stretched — conditions often stabilize from here.";
-  } else if (r < 45) {
-    state = "weak";
-    tone = "negative";
-    sentence = "Momentum is fading";
-    meaning = "Buyers are stepping back; moves lack conviction.";
-  } else if (r > 70) {
-    state = "overbought";
-    tone = "neutral";
-    sentence = "Momentum is stretched";
-    meaning = "Buying has run hot — short pauses are typical from these levels.";
-  } else if (r > 55) {
-    state = "strong";
-    tone = "positive";
-    sentence = "Momentum is firming";
-    meaning = "Buyers are in control without overheating.";
-  } else {
-    state = "neutral";
-    tone = "neutral";
-    sentence = "Momentum is balanced";
-    meaning = "Neither side is pressing — the tape is at rest.";
-  }
-  return {
-    key: "momentum",
-    label: "Momentum",
-    state,
-    value: `RSI ${r.toFixed(0)}`,
-    sentence,
-    meaning,
-    tone,
-  };
-}
+  const trend: SignalReading =
+    above20 && above50 && spread > 1
+      ? { key: "trend", label: "Near-term trend", state: "bullish", value: `+${spread.toFixed(2)}% vs 50d`, sentence: "Trend is constructive", meaning: "Price sits above both its short and longer-term averages.", tone: "positive" }
+      : !above20 && !above50 && spread < -1
+      ? { key: "trend", label: "Near-term trend", state: "bearish", value: `${spread.toFixed(2)}% vs 50d`, sentence: "Trend is weakening", meaning: "Price has slipped below its short and longer-term averages.", tone: "negative" }
+      : { key: "trend", label: "Near-term trend", state: "neutral", value: `${spread >= 0 ? "+" : ""}${spread.toFixed(2)}% vs 50d`, sentence: "Trend is range-bound", meaning: "Price is hovering near its averages with no clear direction.", tone: "neutral" };
 
-function computeVolume(asset: Pick<Asset, "volume" | "marketCap">): SignalReading {
-  // Synthesize a "20d average" from a stable ratio of market cap.
-  const avg = asset.marketCap * 0.018;
-  const ratio = asset.volume / avg;
-  const pct = (ratio - 1) * 100;
-  let state: string;
-  let tone: Tone;
-  let sentence: string;
-  let meaning: string;
-  if (ratio > 1.25) {
-    state = "strong";
-    tone = "positive";
-    sentence = "Participation is strong";
-    meaning = "Trading activity is meaningfully above its recent baseline.";
-  } else if (ratio > 1.05) {
-    state = "rising";
-    tone = "positive";
-    sentence = "Participation is rising";
-    meaning = "Activity is picking up versus the trailing average.";
-  } else if (ratio < 0.8) {
-    state = "weak";
-    tone = "negative";
-    sentence = "Participation is thin";
-    meaning = "Few hands are involved — moves carry less weight.";
-  } else {
-    state = "steady";
-    tone = "neutral";
-    sentence = "Participation is steady";
-    meaning = "Activity is tracking close to the recent average.";
-  }
-  return {
-    key: "volume",
-    label: "Market activity",
-    state,
-    value: `${pct >= 0 ? "+" : ""}${pct.toFixed(0)}% vs 20d avg (vol/mcap)`,
-    sentence,
-    meaning,
-    tone,
-  };
-}
+  // ── Momentum ───────────────────────────────────────────────────
+  const r = _rsi(closes);
+  const momentum: SignalReading =
+    r < 30
+      ? { key: "momentum", label: "Momentum", state: "oversold", value: `RSI ${r.toFixed(0)}`, sentence: "Momentum is oversold", meaning: "Selling pressure has stretched — conditions often stabilize from here.", tone: "neutral" }
+      : r < 45
+      ? { key: "momentum", label: "Momentum", state: "weak", value: `RSI ${r.toFixed(0)}`, sentence: "Momentum is fading", meaning: "Buyers are stepping back; moves lack conviction.", tone: "negative" }
+      : r > 70
+      ? { key: "momentum", label: "Momentum", state: "overbought", value: `RSI ${r.toFixed(0)}`, sentence: "Momentum is stretched", meaning: "Buying has run hot — short pauses are typical from these levels.", tone: "neutral" }
+      : r > 55
+      ? { key: "momentum", label: "Momentum", state: "strong", value: `RSI ${r.toFixed(0)}`, sentence: "Momentum is firming", meaning: "Buyers are in control without overheating.", tone: "positive" }
+      : { key: "momentum", label: "Momentum", state: "neutral", value: `RSI ${r.toFixed(0)}`, sentence: "Momentum is balanced", meaning: "Neither side is pressing — the tape is at rest.", tone: "neutral" };
 
-function computeVolatility(spark: number[]): SignalReading {
-  const recent = spark.slice(-20);
-  const prior = spark.slice(-40, -20);
-  const rNow = stdev(recent) / (recent.reduce((a, b) => a + b, 0) / recent.length);
-  const rPrev = stdev(prior) / (prior.reduce((a, b) => a + b, 0) / prior.length);
-  const ratio = rNow / rPrev;
-  let state: string;
-  let tone: Tone;
-  let sentence: string;
-  let meaning: string;
-  if (rNow < 0.012) {
-    state = "calm";
-    tone = "positive";
-    sentence = "Volatility is calm";
-    meaning = "Price is moving in a tight range — uncertainty is low.";
-  } else if (ratio > 1.25) {
-    state = "expanding";
-    tone = "negative";
-    sentence = "Volatility is expanding";
-    meaning = "Daily ranges are widening — expect less predictable moves.";
-  } else if (rNow > 0.025) {
-    state = "high";
-    tone = "negative";
-    sentence = "Volatility is high";
-    meaning = "Conditions are unsettled and headlines may move price quickly.";
-  } else {
-    state = "normal";
-    tone = "neutral";
-    sentence = "Volatility is normal";
-    meaning = "Ranges are in line with the recent regime.";
-  }
-  return {
-    key: "volatility",
-    label: "Volatility",
-    state,
-    value: `${(rNow * 100).toFixed(2)}% daily`,
-    sentence,
-    meaning,
-    tone,
-  };
-}
+  // ── Volume ─────────────────────────────────────────────────────
+  const vols = analysis.candles.map((c) => c.v);
+  const avgVol = _sma(vols, Math.min(20, vols.length - 1));
+  const lastVol = vols[vols.length - 1];
+  const volRatio = lastVol / (avgVol || 1);
+  const volPct = (volRatio - 1) * 100;
+  const volume: SignalReading =
+    volRatio > 1.25
+      ? { key: "volume", label: "Market activity", state: "strong", value: `+${volPct.toFixed(0)}% vs 20d avg`, sentence: "Participation is strong", meaning: "Trading activity is meaningfully above its recent baseline.", tone: "positive" }
+      : volRatio > 1.05
+      ? { key: "volume", label: "Market activity", state: "rising", value: `+${volPct.toFixed(0)}% vs 20d avg`, sentence: "Participation is rising", meaning: "Activity is picking up versus the trailing average.", tone: "positive" }
+      : volRatio < 0.8
+      ? { key: "volume", label: "Market activity", state: "weak", value: `${volPct.toFixed(0)}% vs 20d avg`, sentence: "Participation is thin", meaning: "Few hands are involved — moves carry less weight.", tone: "negative" }
+      : { key: "volume", label: "Market activity", state: "steady", value: `${volPct >= 0 ? "+" : ""}${volPct.toFixed(0)}% vs 20d avg`, sentence: "Participation is steady", meaning: "Activity is tracking close to the recent average.", tone: "neutral" };
 
-function computePosition(spark: number[]): SignalReading {
-  const last = spark[spark.length - 1];
-  const hi = Math.max(...spark);
-  const lo = Math.min(...spark);
-  const pct = (last - lo) / (hi - lo);
-  let state: string;
-  let tone: Tone;
-  let sentence: string;
-  let meaning: string;
-  if (pct < 0.15) {
-    state = "near support";
-    tone = "positive";
-    sentence = "Price sits near support";
-    meaning = "Trading close to the bottom of the recent range.";
-  } else if (pct < 0.4) {
-    state = "lower range";
-    tone = "neutral";
-    sentence = "Price is in the lower range";
-    meaning = "Below the midpoint of the recent range, closer to support.";
-  } else if (pct > 0.85) {
-    state = "near resistance";
-    tone = "negative";
-    sentence = "Price is testing resistance";
-    meaning = "Trading close to the top of the recent range.";
-  } else if (pct > 0.6) {
-    state = "upper range";
-    tone = "neutral";
-    sentence = "Price holds the upper range";
-    meaning = "Above the midpoint, with resistance overhead.";
-  } else {
-    state = "mid-range";
-    tone = "neutral";
-    sentence = "Price is mid-range";
-    meaning = "Sitting in the middle of the recent range — no edge either way.";
-  }
-  return {
-    key: "position",
-    label: "Position",
-    state,
-    value: `${(pct * 100).toFixed(0)}% of range`,
-    sentence,
-    meaning,
-    tone,
-  };
-}
+  // ── Volatility ─────────────────────────────────────────────────
+  const atrPct = (atr / last) * 100;
+  const recentRanges = analysis.candles.slice(-14).map((c) => c.h - c.l);
+  const priorRanges = analysis.candles.slice(-40, -14).map((c) => c.h - c.l);
+  const avgRecent = recentRanges.reduce((a, b) => a + b, 0) / (recentRanges.length || 1);
+  const avgPrior = priorRanges.reduce((a, b) => a + b, 0) / (priorRanges.length || 1);
+  const rangeExpandRatio = avgPrior > 0 ? avgRecent / avgPrior : 1;
+  const volatility: SignalReading =
+    rangeExpandRatio > 1.25
+      ? { key: "volatility", label: "Volatility", state: "expanding", value: `ATR ${atrPct.toFixed(2)}%`, sentence: "Volatility is expanding", meaning: "Daily ranges are widening — expect less predictable moves.", tone: "negative" }
+      : atrPct < 1.5
+      ? { key: "volatility", label: "Volatility", state: "calm", value: `ATR ${atrPct.toFixed(2)}%`, sentence: "Volatility is calm", meaning: "Price is moving in a tight range — uncertainty is low.", tone: "positive" }
+      : atrPct > 4
+      ? { key: "volatility", label: "Volatility", state: "high", value: `ATR ${atrPct.toFixed(2)}%`, sentence: "Volatility is high", meaning: "Conditions are unsettled and headlines may move price quickly.", tone: "negative" }
+      : { key: "volatility", label: "Volatility", state: "normal", value: `ATR ${atrPct.toFixed(2)}%`, sentence: "Volatility is normal", meaning: "Ranges are in line with the recent regime.", tone: "neutral" };
 
-export function readSignals(asset: Asset): SignalReading[] {
-  return [
-    computeTrend(asset.sparkline),
-    computeMomentum(asset.sparkline),
-    computeVolume(asset),
-    computeVolatility(asset.sparkline),
-    computePosition(asset.sparkline),
-  ];
+  // ── Position ───────────────────────────────────────────────────
+  const range = resistance - support || 1;
+  const pos = (last - support) / range;
+  const position: SignalReading =
+    pos < 0.15
+      ? { key: "position", label: "Position", state: "near support", value: `${(pos * 100).toFixed(0)}% of range`, sentence: "Price sits near support", meaning: "Trading close to the structural support.", tone: "positive" }
+      : pos < 0.4
+      ? { key: "position", label: "Position", state: "lower range", value: `${(pos * 100).toFixed(0)}% of range`, sentence: "Price is in the lower range", meaning: "Below the midpoint, closer to support.", tone: "neutral" }
+      : pos > 0.85
+      ? { key: "position", label: "Position", state: "near resistance", value: `${(pos * 100).toFixed(0)}% of range`, sentence: "Price is testing resistance", meaning: "Trading close to structural resistance.", tone: "negative" }
+      : pos > 0.6
+      ? { key: "position", label: "Position", state: "upper range", value: `${(pos * 100).toFixed(0)}% of range`, sentence: "Price holds the upper range", meaning: "Above the midpoint, with resistance overhead.", tone: "neutral" }
+      : { key: "position", label: "Position", state: "mid-range", value: `${(pos * 100).toFixed(0)}% of range`, sentence: "Price is mid-range", meaning: "Sitting in the middle of the recent range — no edge either way.", tone: "neutral" };
+
+  return [trend, momentum, volume, volatility, position];
 }
 
 /**
  * Compose the five signals into one calm interpretation paragraph.
- * Deterministic — priority-ordered clauses, joined with soft connectors.
+ * Built from daily candle data — not the 7-day sparkline.
  */
-export function buildTruth(asset: Asset): string {
-  const s = readSignals(asset);
+export function deriveTruthFromAnalysis(analysis: AssetAnalysis): string {
+  if (analysis.candles.length < 2) return "";
+  const s = deriveSignalsFromAnalysis(analysis);
+  if (s.length === 0) return "";
   const by = Object.fromEntries(s.map((x) => [x.key, x])) as Record<SignalKey, SignalReading>;
 
-  // Lead clause — trend + momentum read together
   let lead: string;
   if (by.trend.state === "bullish" && by.momentum.state === "strong") {
-    lead = `${asset.name} is trending higher with firm momentum`;
+    lead = `${analysis.symbol} is trending higher with firm momentum`;
   } else if (by.trend.state === "bullish" && by.momentum.state === "overbought") {
-    lead = `${asset.name} is extended after a constructive run`;
+    lead = `${analysis.symbol} is extended after a constructive run`;
   } else if (by.trend.state === "bearish" && by.momentum.state === "oversold") {
-    lead = `${asset.name} is stretched to the downside`;
+    lead = `${analysis.symbol} is stretched to the downside`;
   } else if (by.trend.state === "bearish" && by.momentum.state === "weak") {
-    lead = `${asset.name} is drifting lower without conviction`;
+    lead = `${analysis.symbol} is drifting lower without conviction`;
   } else if (by.trend.state === "neutral" && by.momentum.state === "oversold") {
-    lead = `${asset.name} is consolidating with mild oversold conditions`;
+    lead = `${analysis.symbol} is consolidating with mild oversold conditions`;
   } else if (by.trend.state === "neutral" && by.momentum.state === "overbought") {
-    lead = `${asset.name} is consolidating after a stretched move`;
+    lead = `${analysis.symbol} is consolidating after a stretched move`;
   } else if (by.trend.state === "bullish") {
-    lead = `${asset.name} is holding a constructive tone`;
+    lead = `${analysis.symbol} is holding a constructive tone`;
   } else if (by.trend.state === "bearish") {
-    lead = `${asset.name} is leaning softer`;
+    lead = `${analysis.symbol} is leaning softer`;
   } else {
-    lead = `${asset.name} is range-bound`;
+    lead = `${analysis.symbol} is range-bound`;
   }
 
-  // Support clause — volume tells us how much to weight the move
   const vol =
     by.volume.state === "strong"
       ? "and participation is meaningfully above its baseline"
@@ -405,7 +259,6 @@ export function buildTruth(asset: Asset): string {
           ? "though participation remains thin"
           : "with steady participation";
 
-  // Closing clause — volatility + position frame the risk
   const close =
     by.volatility.state === "expanding"
       ? `Ranges are widening, and price ${by.position.sentence.replace(/^Price /, "")}.`

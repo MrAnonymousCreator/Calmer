@@ -3,10 +3,10 @@ import { ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
 import {
   type Asset,
   type SignalReading,
-  buildTruth,
+  deriveSignalsFromAnalysis,
+  deriveTruthFromAnalysis,
   formatBig,
   formatPrice,
-  readSignals,
 } from "@/lib/market-data";
 import { useAnalysis } from "@/lib/use-analysis";
 import { PriceChart } from "./PriceChart";
@@ -47,11 +47,18 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
   const [view, setView] = useState<(typeof VIEWS)[number]>("Overview");
   const positive = asset.change24h >= 0;
 
-  const signals = useMemo(() => readSignals(asset), [asset]);
-  const truth = useMemo(() => buildTruth(asset), [asset]);
   const { analysis, isLoading: analysisLoading } = useAnalysis(asset.id, asset.symbol);
-  
   const [memory, setMemory] = useState<EngineMemory | null>(null);
+
+  // Derived from daily candles — only computed when analysis is available.
+  const signals = useMemo(
+    () => (analysis ? deriveSignalsFromAnalysis(analysis) : []),
+    [analysis],
+  );
+  const truth = useMemo(
+    () => (analysis ? deriveTruthFromAnalysis(analysis) : ""),
+    [analysis],
+  );
 
   return (
     <div className="mx-auto w-full max-w-5xl px-10 py-12">
@@ -108,9 +115,14 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
 
       {view === "Overview" ? (
         <>
-          {/* Multi-day narrative */}
+          {/*
+           * Everything below the header depends on analysis.candles / analysis.boundaries.
+           * While analysis is loading, show an explicit skeleton — no silent fallback to
+           * the sparkline-derived path, which uses the wrong timeframe.
+           */}
           {analysis ? (
             <>
+              {/* Multi-day narrative */}
               <div className="mt-10">
                 <ChangeLog analysis={analysis} />
               </div>
@@ -120,41 +132,39 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
               <div className="mt-6">
                 <StructuralBoundaries analysis={analysis} />
               </div>
+
+              {/* Truth Engine — daily-candle reconstruction */}
+              <div className="mt-6">
+                <TruthEngine analysis={analysis} />
+              </div>
+
+              {/* State Engine */}
+              <div className="mt-6">
+                <StateEngine asset={asset} analysis={analysis} memory={memory} onMemoryChange={setMemory} />
+              </div>
+
+              {/* Signal summary */}
+              <section className="mt-6 rounded-3xl bg-surface p-6">
+                <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                  Signal summary
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{truth}</p>
+                <div className="mt-5 flex flex-wrap gap-2">
+                  {signals.map((s) => (
+                    <SignalChip key={s.key} signal={s} />
+                  ))}
+                </div>
+              </section>
+
+              {/* Signal breakdown */}
+              <SignalBreakdown signals={signals} />
             </>
           ) : (
-            <div className="mt-10 rounded-3xl bg-surface p-8 flex items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {analysisLoading
-                ? "Compiling 14-day structural narrative…"
-                : "Structural narrative unavailable right now."}
-            </div>
+            /* Explicit loading/error skeleton — never falls back to sparkline math */
+            <AnalysisSkeleton loading={analysisLoading} />
           )}
 
-          {/* Truth Engine */}
-          <div className="mt-6">
-            <TruthEngine asset={asset} />
-          </div>
-
-          {/* State Engine */}
-          <div className="mt-6">
-            <StateEngine asset={asset} analysis={analysis} memory={memory} onMemoryChange={setMemory} />
-          </div>
-
-
-          {/* Signal strip */}
-          <section className="mt-6 rounded-3xl bg-surface p-6">
-            <div className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              Signal summary
-            </div>
-            <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{truth}</p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {signals.map((s) => (
-                <SignalChip key={s.key} signal={s} />
-              ))}
-            </div>
-          </section>
-
-          {/* Chart card */}
+          {/* Chart card — uses asset.sparkline; shown regardless of analysis state */}
           <section className="mt-6 rounded-3xl bg-surface p-8">
             <div className="flex items-center justify-between">
               <div>
@@ -182,7 +192,6 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
                 ))}
               </div>
             </div>
-
             <div className="mt-8">
               <PriceChart data={asset.sparkline} positive={positive} />
             </div>
@@ -193,8 +202,8 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
             {[
               { label: "Market cap", value: formatBig(asset.marketCap) },
               { label: "24h volume", value: formatBig(asset.volume) },
-              { label: "Circulating", value: "19.7M" },
-              { label: "All-time high", value: `$${formatPrice(asset.price * 1.18)}` },
+              { label: "Circulating", value: "—" },
+              { label: "All-time high", value: "—" },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl bg-surface p-5">
                 <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -205,10 +214,8 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
             ))}
           </section>
 
-          <SignalBreakdown signals={signals} />
-
           {/* About */}
-          <section className="mt-8 rounded-3xl bg-surface p-8">
+          <section className="mt-6 rounded-3xl bg-surface p-8">
             <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
               About
             </div>
@@ -227,6 +234,31 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
         </>
       ) : (
         <MarketCalendar />
+      )}
+    </div>
+  );
+}
+
+function AnalysisSkeleton({ loading }: { loading: boolean }) {
+  return (
+    <div className="mt-10 space-y-3">
+      {/* Pulsing placeholder cards matching the heights of the analysis sections */}
+      {loading ? (
+        <>
+          <div className="animate-pulse rounded-3xl bg-surface h-40 flex items-center justify-center gap-3 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+            Compiling 14-day structural narrative…
+          </div>
+          <div className="animate-pulse rounded-3xl bg-surface h-28" />
+          <div className="animate-pulse rounded-3xl bg-surface h-64" />
+          <div className="animate-pulse rounded-3xl bg-surface h-52" />
+          <div className="animate-pulse rounded-3xl bg-surface h-36" />
+        </>
+      ) : (
+        <div className="rounded-3xl bg-surface p-8 flex items-center gap-3 text-sm text-muted-foreground">
+          <span className="inline-block h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+          Structural analysis unavailable — data could not be retrieved right now.
+        </div>
       )}
     </div>
   );

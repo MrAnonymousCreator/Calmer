@@ -1,96 +1,78 @@
 import { useMemo, type ReactNode } from "react";
-import type { Asset } from "@/lib/market-data";
+import type { AssetAnalysis } from "@/lib/analysis";
 import { formatPrice } from "@/lib/market-data";
 import { cn } from "@/lib/utils";
 
-function ema(arr: number[], period: number): number {
-  if (arr.length === 0) return 0;
-  const k = 2 / (period + 1);
-  let e = arr[0];
-  for (let i = 1; i < arr.length; i++) e = arr[i] * k + e * (1 - k);
-  return e;
-}
+// ── Minimal math needed for reconstruction (daily-close inputs) ──
 
-function rsi(arr: number[], period = 14): number {
-  if (arr.length < period + 1) return 50;
-  let gains = 0;
-  let losses = 0;
-  for (let i = arr.length - period; i < arr.length; i++) {
-    const d = arr[i] - arr[i - 1];
-    if (d >= 0) gains += d;
-    else losses -= d;
+function rsiFromCloses(closes: number[], period = 14): number {
+  if (closes.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
   }
-  const ag = gains / period;
-  const al = losses / period;
+  const ag = gains / period, al = losses / period;
   if (al === 0) return 100;
   return 100 - 100 / (1 + ag / al);
 }
 
-function dailyReturns(arr: number[]): number[] {
-  const out: number[] = [];
-  for (let i = 1; i < arr.length; i++) out.push((arr[i] - arr[i - 1]) / arr[i - 1]);
-  return out;
+function stdevOf(a: number[]): number {
+  if (a.length === 0) return 0;
+  const m = a.reduce((x, y) => x + y, 0) / a.length;
+  return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length);
 }
 
-function mean(a: number[]): number {
-  return a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
-}
-
-function stdev(a: number[]): number {
-  const m = mean(a);
-  return Math.sqrt(mean(a.map((v) => (v - m) ** 2)));
-}
+// ────────────────────────────────────────────────────────────────
 
 type Reconstruction = {
   systemState: "STABLE STATE" | "ELEVATED STATE";
   prose: string;
-  metrics: {
-    label: string;
-    value: string;
-    context: string;
-  }[];
-  anomaly:
-    | { kind: "baseline"; text: string }
-    | { kind: "active"; text: string };
+  metrics: { label: string; value: string; context: string }[];
+  anomaly: { kind: "baseline"; text: string } | { kind: "active"; text: string };
 };
 
-function buildReconstruction(asset: Asset): Reconstruction {
-  const s = asset.sparkline;
-  const last = s[s.length - 1] ?? asset.price;
-  const ema20 = ema(s.slice(-20), 20);
-  const ema20Prev = ema(s.slice(-21, -1), 20);
-  const pricePos = ((last - ema20) / ema20) * 100;
-  const r = rsi(s);
-  const rPrev = rsi(s.slice(0, -1));
+function buildReconstructionFromAnalysis(analysis: AssetAnalysis): Reconstruction {
+  const closes = analysis.candles.map((c) => c.c);
+  const last = closes[closes.length - 1] ?? 0;
+  const { sma20, atr } = analysis.boundaries;
+
+  const pricePos = ((last - sma20) / sma20) * 100;
+  const r = rsiFromCloses(closes);
+  const rPrev = rsiFromCloses(closes.slice(0, -1));
   const rDelta = r - rPrev;
 
-  const rets = dailyReturns(s);
-  const recent = rets.slice(-7);
-  const baseline = rets.slice(-30, -7);
-  const sigmaRecent = stdev(recent);
-  const sigmaBase = stdev(baseline) || sigmaRecent || 0.0001;
+  // Daily return volatility: recent 7 vs prior 30
+  const rets: number[] = [];
+  for (let i = 1; i < closes.length; i++) rets.push((closes[i] - closes[i - 1]) / closes[i - 1]);
+  const sigmaRecent = stdevOf(rets.slice(-7));
+  const sigmaBase = stdevOf(rets.slice(-30, -7)) || sigmaRecent || 0.0001;
   const sigmaDev = (sigmaRecent - sigmaBase) / sigmaBase;
 
-  // Structural level direction
-  const emaHolding = last >= ema20 ? "Holding" : "Lost";
-  const emaDirection = ema20 > ema20Prev ? "Expanding" : "Compressing";
+  // SMA direction
+  const sma20Slice = closes.slice(-21, -1);
+  const sma20Prev = sma20Slice.length
+    ? sma20Slice.reduce((a, b) => a + b, 0) / sma20Slice.length
+    : sma20;
+  const smaHolding = last >= sma20 ? "Holding" : "Lost";
+  const smaDirection = sma20 > sma20Prev ? "Expanding" : "Compressing";
 
-  // Prose composition (no emotional language)
+  // Prose
   const fragments: string[] = [];
   if (pricePos > 0) {
     fragments.push(
-      `${asset.name} is holding a ${Math.abs(pricePos) < 1 ? "tightly compressed" : "compressed"} structure ${pricePos.toFixed(1)}% above its 20-day EMA`,
+      `${analysis.symbol} is holding a ${Math.abs(pricePos) < 1 ? "tightly compressed" : "compressed"} structure ${pricePos.toFixed(1)}% above its 20-day average`,
     );
   } else {
     fragments.push(
-      `${asset.name} is trading ${Math.abs(pricePos).toFixed(1)}% beneath its 20-day EMA`,
+      `${analysis.symbol} is trading ${Math.abs(pricePos).toFixed(1)}% beneath its 20-day average`,
     );
   }
 
   if (r > 68) {
     fragments.push("momentum is highly overextended on the daily horizon");
   } else if (r < 32) {
-    fragments.push("Momentum is cooling rapidly below historical norms");
+    fragments.push("momentum is cooling rapidly below historical norms");
   } else if (Math.abs(rDelta) < 2) {
     fragments.push("momentum indicators are flat, signaling a low-conviction consolidation phase");
   } else if (rDelta < 0) {
@@ -111,32 +93,33 @@ function buildReconstruction(asset: Asset): Reconstruction {
 
   const prose = fragments.join(". ") + ".";
 
-  // Anomaly detection
+  // Anomaly
   const anomalyActive = sigmaDev > 1.5 || r > 68 || r < 32;
   const anomaly: Reconstruction["anomaly"] = anomalyActive
     ? {
         kind: "active",
         text:
           sigmaDev > 1.5
-            ? `Volatility expansion detected: current 7-day trading range exceeds 30-day baseline by ${sigmaDev.toFixed(1)}σ.`
+            ? `Volatility expansion detected: recent 7-day return range exceeds 30-day baseline by ${sigmaDev.toFixed(1)}σ.`
             : r > 68
               ? `Momentum extension detected: RSI(14) reading at ${r.toFixed(0)} exceeds normal operating band.`
               : `Momentum exhaustion detected: RSI(14) reading at ${r.toFixed(0)} sits below normal operating band.`,
       }
     : {
         kind: "baseline",
-        text:
-          "System baseline normal. No liquidity cliffs or volume standard deviation breaches detected over the trailing 24-hour cycle.",
+        text: "System baseline normal. No liquidity cliffs or volume standard deviation breaches detected over the trailing daily candle series.",
       };
+
+  const atrPct = last > 0 ? (atr / last) * 100 : 0;
 
   return {
     systemState: anomalyActive ? "ELEVATED STATE" : "STABLE STATE",
     prose,
     metrics: [
       {
-        label: "EMA Position",
-        value: `${pricePos >= 0 ? "+" : ""}${pricePos.toFixed(2)}% vs EMA20`,
-        context: `${Math.abs(pricePos) < 1 ? "Neutral" : pricePos > 0 ? "Extended above" : "Below"} 20-day EMA`,
+        label: "SMA Position",
+        value: `${pricePos >= 0 ? "+" : ""}${pricePos.toFixed(2)}% vs SMA20`,
+        context: `${Math.abs(pricePos) < 1 ? "Neutral" : pricePos > 0 ? "Extended above" : "Below"} 20-day average`,
       },
       {
         label: "Momentum (RSI)",
@@ -145,21 +128,21 @@ function buildReconstruction(asset: Asset): Reconstruction {
       },
       {
         label: "Structural Level",
-        value: `$${formatPrice(ema20)} (EMA)`,
-        context: emaHolding,
+        value: `${formatPrice(sma20)} (SMA20)`,
+        context: smaHolding,
       },
       {
         label: "Volatility Regime",
-        value: `${(sigmaRecent * 100).toFixed(2)}% daily`,
-        context: `${sigmaDev >= 0 ? "+" : ""}${sigmaDev.toFixed(2)}σ (${emaDirection})`,
+        value: `ATR ${atrPct.toFixed(2)}%`,
+        context: `${sigmaDev >= 0 ? "+" : ""}${sigmaDev.toFixed(2)}σ (${smaDirection})`,
       },
     ],
     anomaly,
   };
 }
 
-export function TruthEngine({ asset }: { asset: Asset }) {
-  const r = useMemo(() => buildReconstruction(asset), [asset]);
+export function TruthEngine({ analysis }: { analysis: AssetAnalysis }) {
+  const r = useMemo(() => buildReconstructionFromAnalysis(analysis), [analysis]);
   const elevated = r.systemState === "ELEVATED STATE";
 
   return (
@@ -167,7 +150,7 @@ export function TruthEngine({ asset }: { asset: Asset }) {
       {/* Header bar */}
       <header className="flex items-center justify-between border-b border-border/60 px-6 py-3 font-mono text-[10.5px] uppercase tracking-[0.22em] text-muted-foreground">
         <span>
-          CALM TERMINAL <span className="opacity-40">//</span> {asset.symbol}-USD RECONSTRUCTION
+          CALM TERMINAL <span className="opacity-40">//</span> {analysis.symbol}-USD RECONSTRUCTION
         </span>
         <span
           className={cn(
