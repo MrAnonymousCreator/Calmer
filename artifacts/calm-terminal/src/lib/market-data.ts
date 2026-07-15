@@ -118,25 +118,9 @@ export type SignalReading = {
   tone: Tone;
 };
 
-// ─────── math helpers (internal) ───────
-function _sma(arr: number[], n: number): number {
-  const s = arr.slice(-n);
-  return s.reduce((a, b) => a + b, 0) / s.length;
-}
-function _rsi(closes: number[], period = 14): number {
-  if (closes.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1];
-    if (d >= 0) gains += d; else losses -= d;
-  }
-  const ag = gains / period, al = losses / period;
-  if (al === 0) return 100;
-  return 100 - 100 / (1 + ag / al);
-}
-
 // ───── Analysis-based signal derivation ─────────────────────────
 import type { AssetAnalysis } from "./analysis";
+import { sma as _sma, rsi as _rsi } from "./math";
 
 export function deriveSignalsFromAnalysis(analysis: AssetAnalysis): SignalReading[] {
   const closes = analysis.candles.map((c) => c.c);

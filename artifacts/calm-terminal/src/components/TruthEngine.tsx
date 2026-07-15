@@ -3,19 +3,7 @@ import type { AssetAnalysis } from "@/lib/analysis";
 import { formatPrice } from "@/lib/market-data";
 import { cn } from "@/lib/utils";
 
-// ── Minimal math needed for reconstruction (daily-close inputs) ──
-
-function rsiFromCloses(closes: number[], period = 14): number {
-  if (closes.length < period + 1) return 50;
-  let gains = 0, losses = 0;
-  for (let i = closes.length - period; i < closes.length; i++) {
-    const d = closes[i] - closes[i - 1];
-    if (d >= 0) gains += d; else losses -= d;
-  }
-  const ag = gains / period, al = losses / period;
-  if (al === 0) return 100;
-  return 100 - 100 / (1 + ag / al);
-}
+import { rsi as rsiFromCloses } from "@/lib/math";
 
 function stdevOf(a: number[]): number {
   if (a.length === 0) return 0;

@@ -1,4 +1,5 @@
 import type { Candle } from "./analysis";
+import { rsi } from "./math";
 
 /**
  * Calm Terminal — Backend State Engine
@@ -455,19 +456,6 @@ function mean(a: number[]): number {
 function stdev(a: number[]): number {
   const m = mean(a);
   return Math.sqrt(mean(a.map((v) => (v - m) ** 2)));
-}
-
-function rsi(arr: number[], period = 14): number {
-  if (arr.length < period + 1) return 50;
-  let g = 0;
-  let l = 0;
-  for (let i = arr.length - period; i < arr.length; i++) {
-    const d = arr[i] - arr[i - 1];
-    if (d >= 0) g += d;
-    else l -= d;
-  }
-  if (l === 0) return 100;
-  return 100 - 100 / (1 + g / period / (l / period));
 }
 
 function returns(a: number[]): number[] {
