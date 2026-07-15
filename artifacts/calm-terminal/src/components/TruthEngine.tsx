@@ -3,13 +3,7 @@ import type { AssetAnalysis } from "@/lib/analysis";
 import { formatPrice } from "@/lib/market-data";
 import { cn } from "@/lib/utils";
 
-import { rsi as rsiFromCloses } from "@/lib/math";
-
-function stdevOf(a: number[]): number {
-  if (a.length === 0) return 0;
-  const m = a.reduce((x, y) => x + y, 0) / a.length;
-  return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length);
-}
+import { rsi as rsiFromCloses, stdev as stdevOf } from "@/lib/math";
 
 // ────────────────────────────────────────────────────────────────
 

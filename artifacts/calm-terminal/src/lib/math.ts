@@ -9,6 +9,13 @@ export function sma(arr: number[], n: number): number {
   return s.reduce((a, b) => a + b, 0) / s.length;
 }
 
+/** Population standard deviation. */
+export function stdev(a: number[]): number {
+  if (a.length === 0) return 0;
+  const m = a.reduce((x, y) => x + y, 0) / a.length;
+  return Math.sqrt(a.reduce((x, y) => x + (y - m) ** 2, 0) / a.length);
+}
+
 /**
  * Wilder RSI over the last `period` changes in `closes`.
  * Returns 50 when there are fewer than period + 1 values.

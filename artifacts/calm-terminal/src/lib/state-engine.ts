@@ -1,5 +1,5 @@
 import type { Candle } from "./analysis";
-import { rsi } from "./math";
+import { rsi, stdev } from "./math";
 
 /**
  * Calm Terminal — Backend State Engine
