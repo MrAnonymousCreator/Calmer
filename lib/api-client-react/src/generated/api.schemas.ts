@@ -149,3 +149,36 @@ export interface ChartResponse {
   high: number;
 }
 
+export interface DailySnapshot {
+  date: string;
+  symbol: string;
+  close: number;
+  rsi: number;
+  trendState: string;
+  volatilityState: string;
+  truthProse: string;
+  setupKind: string;
+  capturedAt: string;
+}
+
+export interface SnapshotsResponse {
+  assetId: string;
+  snapshots: DailySnapshot[];
+}
+
+export interface WeeklySummary {
+  assetId: string;
+  startDate: string;
+  endDate: string;
+  startPrice: number;
+  endPrice: number;
+  netChange: number;
+  netChangePct: number;
+  biggestMoveDate: string;
+  biggestMovePct: number;
+  elevatedDays: number;
+  stableDays: number;
+  trendDirection: string;
+  days: DailySnapshot[];
+}
+

@@ -14,6 +14,8 @@ tags:
     description: Live market data
   - name: analysis
     description: Structural analysis per asset
+  - name: snapshots
+    description: Daily snapshot history and weekly summaries
 paths:
   /healthz:
     get:
@@ -95,6 +97,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChartResponse"
+
+  /snapshots/{assetId}:
+    get:
+      operationId: getSnapshots
+      tags: [snapshots]
+      summary: Daily snapshot history for one asset
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 30
+      responses:
+        "200":
+          description: Snapshot list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SnapshotsResponse"
+
+  /snapshots/{assetId}/weekly:
+    get:
+      operationId: getWeeklySummary
+      tags: [snapshots]
+      summary: Weekly summary aggregated from 7 daily snapshots
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Weekly summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklySummary"
 
 components:
   schemas:
@@ -395,3 +441,101 @@ components:
           type: number
         high:
           type: number
+
+    DailySnapshot:
+      type: object
+      required:
+        - date
+        - symbol
+        - close
+        - rsi
+        - trendState
+        - volatilityState
+        - truthProse
+        - setupKind
+        - capturedAt
+      properties:
+        date:
+          type: string
+        symbol:
+          type: string
+        close:
+          type: number
+        rsi:
+          type: number
+        trendState:
+          type: string
+        volatilityState:
+          type: string
+          enum:
+            - elevated
+            - stable
+        truthProse:
+          type: string
+        setupKind:
+          type: string
+        capturedAt:
+          type: string
+
+    SnapshotsResponse:
+      type: object
+      required:
+        - assetId
+        - snapshots
+      properties:
+        assetId:
+          type: string
+        snapshots:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailySnapshot"
+
+    WeeklySummary:
+      type: object
+      required:
+        - assetId
+        - startDate
+        - endDate
+        - startPrice
+        - endPrice
+        - netChange
+        - netChangePct
+        - biggestMoveDate
+        - biggestMovePct
+        - elevatedDays
+        - stableDays
+        - trendDirection
+        - days
+      properties:
+        assetId:
+          type: string
+        startDate:
+          type: string
+        endDate:
+          type: string
+        startPrice:
+          type: number
+        endPrice:
+          type: number
+        netChange:
+          type: number
+        netChangePct:
+          type: number
+        biggestMoveDate:
+          type: string
+        biggestMovePct:
+          type: number
+        elevatedDays:
+          type: integer
+        stableDays:
+          type: integer
+        trendDirection:
+          type: string
+          enum:
+            - up
+            - down
+            - flat
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailySnapshot"

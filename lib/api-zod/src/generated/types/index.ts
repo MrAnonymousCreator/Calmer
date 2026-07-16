@@ -23,4 +23,7 @@ export * from './marketsResponse';
 export * from './marketStateBlock';
 export * from './setupSequence';
 export * from './setupSequenceKind';
+export * from './dailySnapshot';
+export * from './snapshotsResponse';
+export * from './weeklySummary';
 export * from './structuralBoundaries';

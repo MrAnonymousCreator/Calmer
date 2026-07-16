@@ -19,7 +19,9 @@ import type {
   AnalysisResponse,
   ChartResponse,
   HealthStatus,
-  MarketsResponse
+  MarketsResponse,
+  SnapshotsResponse,
+  WeeklySummary
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -349,6 +351,158 @@ export function useGetChart<TData = Awaited<ReturnType<typeof getChart>>, TError
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetChartQueryOptions(id,range,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getGetSnapshotsUrl = (assetId: string,
+    limit?: number,) => {
+
+    const normalizedParams: Record<string, string> = {}
+
+    if (limit !== undefined) {
+      normalizedParams['limit'] = String(limit)
+    }
+
+    const params = new URLSearchParams(normalizedParams).toString();
+
+  return `/api/snapshots/${assetId}${params ? `?${params}` : ''}`
+}
+
+/**
+ * @summary Daily snapshot history for one asset
+ */
+export const getSnapshots = async (assetId: string,
+    limit?: number, options?: RequestInit): Promise<SnapshotsResponse> => {
+
+  return customFetch<SnapshotsResponse>(getGetSnapshotsUrl(assetId,limit),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSnapshotsQueryKey = (assetId: string,
+    limit?: number,) => {
+    return [
+    `/api/snapshots/${assetId}${limit !== undefined ? `?limit=${limit}` : ''}`
+    ] as const;
+    }
+
+
+export const getGetSnapshotsQueryOptions = <TData = Awaited<ReturnType<typeof getSnapshots>>, TError = ErrorType<unknown>>(assetId: string,
+    limit?: number, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getSnapshots>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getGetSnapshotsQueryKey(assetId,limit);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSnapshots>>> = ({ signal }) => getSnapshots(assetId,limit, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: assetId !== null && assetId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSnapshots>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSnapshotsQueryResult = NonNullable<Awaited<ReturnType<typeof getSnapshots>>>
+export type GetSnapshotsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Daily snapshot history for one asset
+ */
+
+export function useGetSnapshots<TData = Awaited<ReturnType<typeof getSnapshots>>, TError = ErrorType<unknown>>(
+ assetId: string,
+    limit?: number, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getSnapshots>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSnapshotsQueryOptions(assetId,limit,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getGetWeeklySummaryUrl = (assetId: string,) => {
+
+
+
+
+  return `/api/snapshots/${assetId}/weekly`
+}
+
+/**
+ * @summary Weekly summary aggregated from 7 daily snapshots
+ */
+export const getWeeklySummary = async (assetId: string, options?: RequestInit): Promise<WeeklySummary> => {
+
+  return customFetch<WeeklySummary>(getGetWeeklySummaryUrl(assetId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetWeeklySummaryQueryKey = (assetId: string,) => {
+    return [
+    `/api/snapshots/${assetId}/weekly`
+    ] as const;
+    }
+
+
+export const getGetWeeklySummaryQueryOptions = <TData = Awaited<ReturnType<typeof getWeeklySummary>>, TError = ErrorType<unknown>>(assetId: string, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getWeeklySummary>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getGetWeeklySummaryQueryKey(assetId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getWeeklySummary>>> = ({ signal }) => getWeeklySummary(assetId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: assetId !== null && assetId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getWeeklySummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetWeeklySummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getWeeklySummary>>>
+export type GetWeeklySummaryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Weekly summary aggregated from 7 daily snapshots
+ */
+
+export function useGetWeeklySummary<TData = Awaited<ReturnType<typeof getWeeklySummary>>, TError = ErrorType<unknown>>(
+ assetId: string, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getWeeklySummary>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetWeeklySummaryQueryOptions(assetId,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

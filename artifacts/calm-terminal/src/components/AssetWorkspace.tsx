@@ -10,7 +10,11 @@ import {
 } from "@/lib/market-data";
 import { useAnalysis } from "@/lib/use-analysis";
 import { useChart } from "@/lib/use-chart";
+import { useSnapshots } from "@/lib/use-snapshots";
+import { useWeeklySummary } from "@/lib/use-weekly-summary";
 import { PriceChart } from "./PriceChart";
+import { DailyTimeline } from "./DailyTimeline";
+import { WeeklySummaryCard } from "./WeeklySummary";
 import { SignalBreakdown } from "./SignalBreakdown";
 import { MarketCalendar } from "./MarketCalendar";
 import { StoryCards } from "./StoryCards";
@@ -50,6 +54,8 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
 
   const { analysis, isLoading: analysisLoading } = useAnalysis(asset.id, asset.symbol);
   const { chart, isLoading: chartLoading } = useChart(asset.id, range);
+  const { snapshots, isLoading: snapshotsLoading } = useSnapshots(asset.id, 30);
+  const { summary, isLoading: weeklyLoading } = useWeeklySummary(asset.id);
   const [memory, setMemory] = useState<EngineMemory | null>(null);
 
   // Derived from daily candles — only computed when analysis is available.
@@ -231,6 +237,14 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
               </div>
             ))}
           </section>
+
+          {/* Weekly summary — aggregated from daily snapshots */}
+          <WeeklySummaryCard summary={summary} isLoading={weeklyLoading} />
+
+          {/* Daily timeline — one row per captured day */}
+          <div className="mt-6">
+            <DailyTimeline snapshots={snapshots} isLoading={snapshotsLoading} />
+          </div>
 
           {/* About */}
           <section className="mt-6 rounded-3xl bg-surface p-8">
