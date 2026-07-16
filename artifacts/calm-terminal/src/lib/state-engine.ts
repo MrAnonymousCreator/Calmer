@@ -453,11 +453,6 @@ function mean(a: number[]): number {
   return a.reduce((x, y) => x + y, 0) / Math.max(a.length, 1);
 }
 
-function stdev(a: number[]): number {
-  const m = mean(a);
-  return Math.sqrt(mean(a.map((v) => (v - m) ** 2)));
-}
-
 function returns(a: number[]): number[] {
   const out: number[] = [];
   for (let i = 1; i < a.length; i++) out.push((a[i] - a[i - 1]) / a[i - 1]);

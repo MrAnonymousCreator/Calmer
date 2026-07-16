@@ -17,6 +17,7 @@ import type {
 
 import type {
   AnalysisResponse,
+  ChartResponse,
   HealthStatus,
   MarketsResponse
 } from './api.schemas';
@@ -81,12 +82,12 @@ export const getHealthCheckQueryKey = () => {
     }
 
 
-export const getHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getHealthCheckQueryOptions = <TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>( options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getHealthCheckQueryKey();
+  const queryKey =  getHealthCheckQueryKey();
 
 
 
@@ -108,7 +109,7 @@ export type HealthCheckQueryError = ErrorType<unknown>
  */
 
 export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+  options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof healthCheck>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
@@ -158,12 +159,12 @@ export const getGetMarketsQueryKey = () => {
     }
 
 
-export const getGetMarketsQueryOptions = <TData = Awaited<ReturnType<typeof getMarkets>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetMarketsQueryOptions = <TData = Awaited<ReturnType<typeof getMarkets>>, TError = ErrorType<unknown>>( options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getMarkets>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetMarketsQueryKey();
+  const queryKey =  getGetMarketsQueryKey();
 
 
 
@@ -185,7 +186,7 @@ export type GetMarketsQueryError = ErrorType<unknown>
  */
 
 export function useGetMarkets<TData = Awaited<ReturnType<typeof getMarkets>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMarkets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+  options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getMarkets>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
@@ -239,12 +240,12 @@ export const getGetAnalysisQueryKey = (id: string,
 
 
 export const getGetAnalysisQueryOptions = <TData = Awaited<ReturnType<typeof getAnalysis>>, TError = ErrorType<unknown>>(id: string,
-    symbol: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnalysis>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+    symbol: string, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getAnalysis>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetAnalysisQueryKey(id,symbol);
+  const queryKey =  getGetAnalysisQueryKey(id,symbol);
 
 
 
@@ -267,11 +268,87 @@ export type GetAnalysisQueryError = ErrorType<unknown>
 
 export function useGetAnalysis<TData = Awaited<ReturnType<typeof getAnalysis>>, TError = ErrorType<unknown>>(
  id: string,
-    symbol: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAnalysis>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+    symbol: string, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getAnalysis>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetAnalysisQueryOptions(id,symbol,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+export const getGetChartUrl = (id: string,
+    range: string,) => {
+
+
+
+
+  return `/api/chart/${id}/${range}`
+}
+
+/**
+ * @summary Timeframe-specific price history for charting
+ */
+export const getChart = async (id: string,
+    range: string, options?: RequestInit): Promise<ChartResponse> => {
+
+  return customFetch<ChartResponse>(getGetChartUrl(id,range),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetChartQueryKey = (id: string,
+    range: string,) => {
+    return [
+    `/api/chart/${id}/${range}`
+    ] as const;
+    }
+
+
+export const getGetChartQueryOptions = <TData = Awaited<ReturnType<typeof getChart>>, TError = ErrorType<unknown>>(id: string,
+    range: string, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getChart>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  getGetChartQueryKey(id,range);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getChart>>> = ({ signal }) => getChart(id,range, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined && range !== null && range !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getChart>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetChartQueryResult = NonNullable<Awaited<ReturnType<typeof getChart>>>
+export type GetChartQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Timeframe-specific price history for charting
+ */
+
+export function useGetChart<TData = Awaited<ReturnType<typeof getChart>>, TError = ErrorType<unknown>>(
+ id: string,
+    range: string, options?: { query?: Omit<UseQueryOptions<Awaited<ReturnType<typeof getChart>>, TError, TData>, 'queryKey' | 'queryFn'>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetChartQueryOptions(id,range,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

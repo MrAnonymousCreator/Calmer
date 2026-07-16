@@ -13,6 +13,8 @@ export * from './assetAnalysisBehavioralState';
 export * from './candle';
 export * from './changeLogEvent';
 export * from './changeLogEventTone';
+export * from './chartPoint';
+export * from './chartResponse';
 export * from './expectedMove';
 export * from './healthStatus';
 export * from './invalidation';

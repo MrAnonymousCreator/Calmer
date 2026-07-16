@@ -10,6 +10,9 @@ type CGCoin = {
   price_change_percentage_24h: number | null;
   market_cap: number;
   total_volume: number;
+  circulating_supply: number | null;
+  ath: number | null;
+  ath_change_percentage: number | null;
   sparkline_in_7d?: { price: number[] };
 };
 
@@ -34,6 +37,9 @@ type AssetShape = {
   change24h: number;
   marketCap: number;
   volume: number;
+  circulatingSupply: number | null;
+  ath: number | null;
+  athChangePercentage: number | null;
   sparkline: number[];
   about: string;
 };
@@ -50,7 +56,8 @@ async function fetchFromCoinGecko(): Promise<AssetShape[]> {
   const url =
     `${host}/api/v3/coins/markets` +
     `?vs_currency=usd&order=market_cap_desc&per_page=15&page=1` +
-    `&sparkline=true&price_change_percentage=24h`;
+    `&sparkline=true&price_change_percentage=24h` +
+    `&precision=full`;
 
   const headers: Record<string, string> = { accept: "application/json" };
   if (apiKey) headers["x-cg-pro-api-key"] = apiKey;
@@ -67,6 +74,9 @@ async function fetchFromCoinGecko(): Promise<AssetShape[]> {
     change24h: c.price_change_percentage_24h ?? 0,
     marketCap: c.market_cap ?? 0,
     volume: c.total_volume ?? 0,
+    circulatingSupply: c.circulating_supply ?? null,
+    ath: c.ath ?? null,
+    athChangePercentage: c.ath_change_percentage ?? null,
     sparkline:
       c.sparkline_in_7d?.price && c.sparkline_in_7d.price.length > 0
         ? c.sparkline_in_7d.price

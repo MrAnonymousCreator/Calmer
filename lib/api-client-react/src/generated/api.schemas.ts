@@ -17,6 +17,9 @@ export interface Asset {
   change24h: number;
   marketCap: number;
   volume: number;
+  circulatingSupply: number | null;
+  ath: number | null;
+  athChangePercentage: number | null;
   sparkline: number[];
   about: string;
 }
@@ -131,5 +134,18 @@ export interface AssetAnalysis {
 export interface AnalysisResponse {
   analysis: AssetAnalysis;
   cachedAt: number;
+}
+
+export interface ChartPoint {
+  t: number;
+  p: number;
+}
+
+export interface ChartResponse {
+  id: string;
+  range: string;
+  points: ChartPoint[];
+  low: number;
+  high: number;
 }
 

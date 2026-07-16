@@ -28,6 +28,9 @@ export const GetMarketsResponse = zod.object({
   "change24h": zod.number(),
   "marketCap": zod.number(),
   "volume": zod.number(),
+  "circulatingSupply": zod.number().nullable(),
+  "ath": zod.number().nullable(),
+  "athChangePercentage": zod.number().nullable(),
   "sparkline": zod.array(zod.number()),
   "about": zod.string()
 })),
@@ -96,3 +99,21 @@ export const GetAnalysisResponse = zod.object({
 })
 
 
+/**
+ * @summary Timeframe-specific price history for charting
+ */
+export const GetChartParams = zod.object({
+  "id": zod.coerce.string(),
+  "range": zod.coerce.string()
+})
+
+export const GetChartResponse = zod.object({
+  "id": zod.string(),
+  "range": zod.string(),
+  "points": zod.array(zod.object({
+  "t": zod.number().describe('ms epoch timestamp'),
+  "p": zod.number().describe('price in USD')
+})),
+  "low": zod.number(),
+  "high": zod.number()
+})

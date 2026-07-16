@@ -65,6 +65,37 @@ paths:
               schema:
                 $ref: "#/components/schemas/AnalysisResponse"
 
+  /chart/{id}/{range}:
+    get:
+      operationId: getChart
+      tags: [markets]
+      summary: Timeframe-specific price history for charting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: range
+          in: path
+          required: true
+          schema:
+            type: string
+            enum:
+              - 1H
+              - 1D
+              - 1W
+              - 1M
+              - 1Y
+              - ALL
+      responses:
+        "200":
+          description: Chart data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChartResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -85,6 +116,9 @@ components:
         - change24h
         - marketCap
         - volume
+        - circulatingSupply
+        - ath
+        - athChangePercentage
         - sparkline
         - about
       properties:
@@ -102,6 +136,18 @@ components:
           type: number
         volume:
           type: number
+        circulatingSupply:
+          type:
+            - number
+            - "null"
+        ath:
+          type:
+            - number
+            - "null"
+        athChangePercentage:
+          type:
+            - number
+            - "null"
         sparkline:
           type: array
           items:
@@ -313,4 +359,39 @@ components:
         analysis:
           $ref: "#/components/schemas/AssetAnalysis"
         cachedAt:
+          type: number
+
+    ChartPoint:
+      type: object
+      required:
+        - t
+        - p
+      properties:
+        t:
+          type: number
+          description: "ms epoch timestamp"
+        p:
+          type: number
+          description: "price in USD"
+
+    ChartResponse:
+      type: object
+      required:
+        - id
+        - range
+        - points
+        - low
+        - high
+      properties:
+        id:
+          type: string
+        range:
+          type: string
+        points:
+          type: array
+          items:
+            $ref: "#/components/schemas/ChartPoint"
+        low:
+          type: number
+        high:
           type: number

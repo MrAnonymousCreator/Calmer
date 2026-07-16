@@ -6,6 +6,9 @@ export type Asset = {
   change24h: number;
   marketCap: number;
   volume: number;
+  circulatingSupply: number | null;
+  ath: number | null;
+  athChangePercentage: number | null;
   sparkline: number[];
   about: string;
 };
@@ -27,60 +30,70 @@ export const assets: Asset[] = [
   {
     id: "bitcoin", symbol: "BTC", name: "Bitcoin", price: 71248.32, change24h: 2.14,
     marketCap: 1_402_000_000_000, volume: 28_400_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(11, 68000, 0.012),
     about: "The original peer-to-peer digital currency. A scarce, decentralized store of value.",
   },
   {
     id: "ethereum", symbol: "ETH", name: "Ethereum", price: 3812.05, change24h: 1.42,
     marketCap: 458_200_000_000, volume: 14_800_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(23, 3650, 0.014),
     about: "A programmable settlement layer powering smart contracts and decentralized applications.",
   },
   {
     id: "solana", symbol: "SOL", name: "Solana", price: 184.21, change24h: -0.86,
     marketCap: 84_300_000_000, volume: 3_100_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(31, 190, 0.02),
     about: "A high-throughput blockchain optimized for low-latency consumer applications.",
   },
   {
     id: "cardano", symbol: "ADA", name: "Cardano", price: 0.612, change24h: 0.34,
     marketCap: 21_700_000_000, volume: 540_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(47, 0.6, 0.018),
     about: "A research-driven proof-of-stake network focused on sustainability and formal methods.",
   },
   {
     id: "chainlink", symbol: "LINK", name: "Chainlink", price: 18.94, change24h: 3.21,
     marketCap: 11_200_000_000, volume: 480_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(53, 18, 0.022),
     about: "Decentralized oracle infrastructure connecting smart contracts to real-world data.",
   },
   {
     id: "matic-network", symbol: "MATIC", name: "Polygon", price: 0.748, change24h: -1.92,
     marketCap: 7_300_000_000, volume: 320_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(67, 0.78, 0.02),
     about: "An Ethereum scaling ecosystem of zero-knowledge rollups and sidechains.",
   },
   {
     id: "polkadot", symbol: "DOT", name: "Polkadot", price: 7.21, change24h: 0.92,
     marketCap: 9_800_000_000, volume: 210_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(73, 7, 0.018),
     about: "A multi-chain protocol enabling interoperability between specialized blockchains.",
   },
   {
     id: "avalanche-2", symbol: "AVAX", name: "Avalanche", price: 36.58, change24h: 1.78,
     marketCap: 14_100_000_000, volume: 410_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(89, 35, 0.021),
     about: "A platform of customizable subnets with sub-second finality.",
   },
   {
     id: "bitcoin-cash", symbol: "BCH", name: "Bitcoin Cash", price: 421.10, change24h: 0.42,
     marketCap: 8_300_000_000, volume: 190_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(97, 415, 0.016),
     about: "A Bitcoin fork prioritizing larger blocks and lower transaction fees.",
   },
   {
     id: "bittensor", symbol: "TAO", name: "Bittensor", price: 412.87, change24h: 4.12,
     marketCap: 3_100_000_000, volume: 180_000_000,
+    circulatingSupply: null, ath: null, athChangePercentage: null,
     sparkline: gen(101, 400, 0.025),
     about: "A decentralized network coordinating machine intelligence as a market.",
   },

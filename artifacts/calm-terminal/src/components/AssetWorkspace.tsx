@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowUpRight, ArrowDownRight, Loader2 } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Loader as Loader2 } from "lucide-react";
 import {
   type Asset,
   type SignalReading,
@@ -9,6 +9,7 @@ import {
   formatPrice,
 } from "@/lib/market-data";
 import { useAnalysis } from "@/lib/use-analysis";
+import { useChart } from "@/lib/use-chart";
 import { PriceChart } from "./PriceChart";
 import { SignalBreakdown } from "./SignalBreakdown";
 import { MarketCalendar } from "./MarketCalendar";
@@ -48,6 +49,7 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
   const positive = asset.change24h >= 0;
 
   const { analysis, isLoading: analysisLoading } = useAnalysis(asset.id, asset.symbol);
+  const { chart, isLoading: chartLoading } = useChart(asset.id, range);
   const [memory, setMemory] = useState<EngineMemory | null>(null);
 
   // Derived from daily candles — only computed when analysis is available.
@@ -164,7 +166,7 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
             <AnalysisSkeleton loading={analysisLoading} />
           )}
 
-          {/* Chart card — uses asset.sparkline; shown regardless of analysis state */}
+          {/* Chart card — fetches timeframe-specific data from /chart/:id/:range */}
           <section className="mt-6 rounded-3xl bg-surface p-8">
             <div className="flex items-center justify-between">
               <div>
@@ -172,7 +174,7 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
                   Price chart
                 </div>
                 <div className="text-sm text-muted-foreground mt-1">
-                  Trailing performance · USD
+                  {range} performance · USD
                 </div>
               </div>
               <div className="inline-flex rounded-full bg-muted p-1">
@@ -193,7 +195,16 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
               </div>
             </div>
             <div className="mt-8">
-              <PriceChart data={asset.sparkline} positive={positive} />
+              {chart && chart.points.length > 0 ? (
+                <PriceChart points={chart.points} positive={positive} range={range} />
+              ) : chartLoading ? (
+                <div className="flex h-[320px] items-center justify-center text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2 shrink-0" />
+                  Loading {range} chart data…
+                </div>
+              ) : (
+                <PriceChart points={[]} fallbackData={asset.sparkline} positive={positive} range={range} />
+              )}
             </div>
           </section>
 
@@ -202,14 +213,21 @@ export function AssetWorkspace({ asset }: { asset: Asset }) {
             {[
               { label: "Market cap", value: formatBig(asset.marketCap) },
               { label: "24h volume", value: formatBig(asset.volume) },
-              { label: "Circulating", value: "—" },
-              { label: "All-time high", value: "—" },
+              { label: "Circulating", value: asset.circulatingSupply ? formatBig(asset.circulatingSupply) : "—" },
+              {
+                label: "All-time high",
+                value: asset.ath ? "$" + formatPrice(asset.ath) : "—",
+                sub: asset.athChangePercentage != null ? `${asset.athChangePercentage.toFixed(1)}%` : undefined,
+              },
             ].map((s) => (
               <div key={s.label} className="rounded-2xl bg-surface p-5">
                 <div className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                   {s.label}
                 </div>
                 <div className="mt-2 text-xl tabular-nums text-foreground">{s.value}</div>
+                {s.sub && (
+                  <div className="mt-1 text-xs tabular-nums text-muted-foreground">{s.sub}</div>
+                )}
               </div>
             ))}
           </section>
